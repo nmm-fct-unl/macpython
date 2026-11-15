@@ -1,6 +1,4 @@
-# MacPython 🐍🍏
-
-Nasceu uma ferramenta incrível! 🎉 O MacPython agora junta o melhor de dois mundos: a flexibilidade bruta e análise de dados do Python com a interface fluida, nativa e desenhada a hardware (Metal/SwiftUI) do macOS.
+# MacPython 🐍
 
 O **MacPython** é um wrapper interativo feito em Swift/SwiftUI que junta o poder do interpretador Python a uma interface gráfica nativa de macOS. Com suporte para memória persistente, clique-para-copiar no terminal, um *Canvas* 2D sobreposto e uma paleta de ferramentas expansível via JSON (e até em tempo real pelo Python!).
 
@@ -8,71 +6,98 @@ O **MacPython** é um wrapper interativo feito em Swift/SwiftUI que junta o pode
 - **Janela e Barra Lateral Ajustáveis:** Arraste o divisor para a esquerda/direita ou redimensione a janela principal sem limites.
 - **Histórico Interativo:** Clique em qualquer comando amarelo antigo para o passar instantaneamente para a barra de input.
 - **Paleta JSON em Tempo Real:** Edite `botoes.json` ou crie botões dinamicamente. Atualiza com o clique de um botão ou automaticamente.
-- **Canvas Overlay:** O Swift escuta o output do Python. Comandos mágicos formatados são interceptados e desenhados por cima do terminal em vez de impressos em texto.
+- **Canvas Overlay Animado:** Uma máquina de estados (State Machine) interna permite desenhar, mover e atualizar gráficos e textos em tempo real, sem piscar o ecrã.
+- **MP_Edit (Bidirecional):** Arraste objetos visuais com o rato e o Swift atualiza silenciosamente as coordenadas dentro do próprio interpretador Python!
 
 ## Como Compilar e Executar no macOS
 
 Abra o terminal na pasta onde tem o ficheiro `macpython.swift` e corra:
 
-### 1. Compilar para binário nativo
 ```bash
+# 1. Compilar para binário nativo
 swiftc -parse-as-library macpython.swift -o macpython
-```
 
-### 2. Executar
-```bash
+# 2. Executar
 ./macpython
+
 ```
 
-## A Ponte Python ⇄ Swift (Comandos Mágicos)
+---
 
-O interpretador processa comandos normalmente. Contudo, se imprimir (`print`) uma string iniciada por `::swift::`, o terminal não a apresenta em texto. Em vez disso, envia uma instrução visual ao SwiftUI.
+## A Ponte Python ⇄ Swift (Máquina de Estados)
 
-Experimente estes comandos diretamente na linha de input ou carregando um `.py`:
+O MacPython usa um namespace seguro (`::swift ... ::`) para enviar comandos visuais do Python para a interface. O Swift guarda em memória a posição atual (`at`) e o nome do objeto atual (`name`).
 
-### 1. Limpar Ecrã e Canvas
+**Superpoder da Máquina de Estados:** Se der um nome a um objeto e mais tarde criar outro com o *mesmo nome*, o Swift **atualiza o objeto antigo** (movendo-o ou mudando o texto/imagem) em vez de criar um novo! Ideal para animações.
+
+*(Pode usar o fecho com `::` no final para evitar problemas com quebras de linha, mas o Swift também aceita a sintaxe aberta sem os `::` finais).*
+
+### 1. Limpar Ecrã
 
 ```python
-print("::swift::clear")
+print("::swift clear::")
+
 ```
 
-Apaga todo o histórico de terminal e remove todos os gráficos e textos do Canvas.
-
-### 2. Escrever Texto Flutuante
+### 2. Criar e Atualizar Caixas de Texto
 
 ```python
-print("::swift::at::<Posição_X>::<Posição_Y>::<O_seu_texto_aqui>")
+# Define as coordenadas e o ID (nome) do objeto
+print("::swift at 200 150::")
+print("::swift name etiqueta_1::")
+# Cria o objeto visual
+print("::swift print Este texto suporta espaços perfeitamente!::")
+
 ```
 
-# Exemplo:
+### 3. Inserir e Atualizar Imagens / Gráficos
+
+Ideal para usar em conjunto com o `matplotlib`! Guarde o gráfico num PNG e mande o Swift desenhá-lo:
 
 ```python
-print("::swift::at::200::150::Isto está a flutuar nas coordenadas X=200, Y=150!")
+print("::swift at 300 200::")
+print("::swift name meu_grafico::")
+print("::swift image /Users/o_seu_user/Desktop/grafico.png::")
+
 ```
-
-### 3. Desenhar um Gráfico / Imagem (PNG, JPG)
-
-```python
-print("::swift::image::<Posição_X>::<Posição_Y>::<Caminho_Absoluto_da_Imagem>")
-```
-
-# Exemplo (substitua o caminho por uma imagem no seu Mac):
-
-```python
-print("::swift::image::300::200::/Users/o_seu_user/Desktop/grafico.png")
-```
-
-*Dica de Ouro:* Pode usar bibliotecas de Python como o `matplotlib`, guardar o ficheiro e ordenar na mesma função que o Swift carregue o novo PNG para o ecrã.
 
 ### 4. Criar um Botão na Paleta via Python
 
+Os botões usam o separador vertical `|` para separar os argumentos, permitindo espaços livres no título e no código Python:
+
 ```python
-print("::swift::button::<Titulo>::<Comando_Python>::<SFSymbol>")
+# Sintaxe: Titulo | Comando a executar | Ícone SFSymbol
+print("::swift button Limpar Tudo | print('::swift clear::') | trash::")
+
 ```
 
-# Exemplo:
-```python
-print("::swift::button::Mágica::print('Criado do python!')::wand.and.stars")
-```
+*(Assim que for executado, o botão aparece na barra lateral e é guardado para sempre no ficheiro `botoes.json`)*.
 
-Assim que for executado, um novo botão aparecerá na barra lateral esquerda e será guardado para sempre no ficheiro `botoes.json`.
+---
+
+## 5. Modo de Edição Bidirecional (MP_Edit) 🖱️🔄
+
+O MacPython não se limita a receber ordens do Python. Ele **conversa de volta**.
+Na barra inferior, existe um botão **MP_Edit**. Quando ativado, todos os objetos do Canvas (textos e imagens) ganham uma margem tracejada cor-de-laranja e podem ser arrastados livremente com o rato pelo ecrã.
+
+Sempre que largar um objeto (drag & drop), o Swift **injeta a nova coordenada** de volta no interpretador Python, para dentro de um dicionário global nativo chamado `macpython_pos`.
+
+**Como testar a magia:**
+
+1. Crie um objeto através do terminal:
+`print('::swift name meu_texto::')`
+`print('::swift print Arraste-me!::')`
+2. Ative o botão **MP_Edit** na interface e mova o texto para outro sítio com o rato.
+3. No terminal Python, escreva e envie:
+`print(macpython_pos['meu_texto'])`
+
+*(O Python irá devolver a coordenada exata (X, Y) onde você deixou o objeto visualmente!)*
+
+---
+
+## Licença
+
+Este projeto é disponibilizado sob a **Licença MIT**.
+Criado por Nuno C. Marques (2026).
+Qualquer pessoa pode usar, modificar e distribuir, desde que mantenha a atribuição à versão base do MacPython.
+
