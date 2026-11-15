@@ -98,7 +98,7 @@ O resultado é a tupla com as coordenadas `(x, y)` do objecto.
 
 ## Documentação
 
-A descrição dos módulos Swift, da estrutura do projecto e dos comandos de sistema está em [`API.md`](API.md).
+A descrição dos módulos Swift, da estrutura do projecto e dos comandos de sistema está em [`MacPython.v0.1/API.md`](API.md).
 
 ## Licença
 
