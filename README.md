@@ -1,103 +1,106 @@
 # MacPython 🐍
 
-O **MacPython** é um wrapper interativo feito em Swift/SwiftUI que junta o poder do interpretador Python a uma interface gráfica nativa de macOS. Com suporte para memória persistente, clique-para-copiar no terminal, um *Canvas* 2D sobreposto e uma paleta de ferramentas expansível via JSON (e até em tempo real pelo Python!).
+**Versão:** 0.1  
+**Autor:** Nuno C. Marques  
+**Ano:** 2026
+
+O **MacPython** é uma aplicação para macOS construída em **SwiftUI**, que combina um terminal interactivo com um *Canvas* 2D. Executa um processo Python 3 em background e estabelece uma ponte bidireccional entre o interpretador e a interface gráfica.
+
+A ideia é simples: manter a flexibilidade de uma sessão Python interactiva e acrescentar-lhe uma interface nativa, com uma paleta de ferramentas configurável e objectos gráficos que podem ser manipulados directamente.
+
+![MacPython — versão 0.1](MacPython-v0.1.png)
 
 ## Funcionalidades
-- **Janela e Barra Lateral Ajustáveis:** Arraste o divisor para a esquerda/direita ou redimensione a janela principal sem limites.
-- **Histórico Interativo:** Clique em qualquer comando amarelo antigo para o passar instantaneamente para a barra de input.
-- **Paleta JSON em Tempo Real:** Edite `botoes.json` ou crie botões dinamicamente. Atualiza com o clique de um botão ou automaticamente.
-- **Canvas Overlay Animado:** Uma máquina de estados (State Machine) interna permite desenhar, mover e atualizar gráficos e textos em tempo real, sem piscar o ecrã.
-- **MP_Edit (Bidirecional):** Arraste objetos visuais com o rato e o Swift atualiza silenciosamente as coordenadas dentro do próprio interpretador Python!
 
-## Como Compilar e Executar no macOS
+- **Sessão Python persistente:** os comandos são executados no mesmo interpretador, mantendo o estado e as variáveis entre execuções.
+- **Terminal interactivo:** comandos anteriores podem ser recuperados com um clique ou arrastados para a linha de input. As setas ↑ e ↓ permitem percorrer o histórico.
+- **Selecção de texto:** o output do terminal pode ser seleccionado e copiado.
+- **Paleta dinâmica:** os botões da barra lateral são definidos em `botoes.json`. É possível editar e recarregar o ficheiro, ou acrescentar botões a partir de Python.
+- **Canvas 2D:** permite criar e actualizar objectos de texto e imagens. A actualização de um objecto com o mesmo nome altera o objecto existente, em vez de criar outro.
+- **MP Edit — interacção bidireccional:** permite arrastar objectos no Canvas e disponibiliza as novas coordenadas no interpretador Python, através do dicionário `macpython_pos`.
+- **Interface ajustável:** a janela e a divisão entre a barra lateral e a área de trabalho podem ser redimensionadas.
 
-Abra o terminal na pasta onde tem o ficheiro `macpython.swift` e corra:
+## Requisitos
+
+- macOS
+- Swift (com `swiftc`)
+- Python 3 acessível através de `python3` no `PATH`
+
+## Compilar e executar
+
+Na pasta que contém os ficheiros Swift (`Models.swift`, `MotorPython.swift`, `Components.swift` e `MacPythonApp.swift`), executar:
 
 ```bash
-# 1. Compilar para binário nativo
-swiftc -parse-as-library macpython.swift -o macpython
-
-# 2. Executar
+swiftc -parse-as-library *.swift -o macpython
 ./macpython
-
 ```
 
----
+A aplicação cria e utiliza o ficheiro `botoes.json` para guardar a configuração da paleta.
 
-## A Ponte Python ⇄ Swift (Máquina de Estados)
+## A ponte Python ⇄ Swift
 
-O MacPython usa um namespace seguro (`::swift ... ::`) para enviar comandos visuais do Python para a interface. O Swift guarda em memória a posição atual (`at`) e o nome do objeto atual (`name`).
+A comunicação com a interface é feita através de instruções especiais escritas com `print()`, usando o prefixo `::swift::`.
 
-**Superpoder da Máquina de Estados:** Se der um nome a um objeto e mais tarde criar outro com o *mesmo nome*, o Swift **atualiza o objeto antigo** (movendo-o ou mudando o texto/imagem) em vez de criar um novo! Ideal para animações.
-
-*(Pode usar o fecho com `::` no final para evitar problemas com quebras de linha, mas o Swift também aceita a sintaxe aberta sem os `::` finais).*
-
-### 1. Limpar Ecrã
+### Limpar o Canvas
 
 ```python
-print("::swift clear::")
-
+print("::swift::clear")
 ```
 
-### 2. Criar e Atualizar Caixas de Texto
+### Criar e actualizar texto
+
+O nome é opcional, mas permite actualizar posteriormente o mesmo objecto.
 
 ```python
-# Define as coordenadas e o ID (nome) do objeto
-print("::swift at 200 150::")
-print("::swift name etiqueta_1::")
-# Cria o objeto visual
-print("::swift print Este texto suporta espaços perfeitamente!::")
-
+print("::swift::name::etiqueta_1")
+print("::swift::at::200::150::Olá MacPython!")
 ```
 
-### 3. Inserir e Atualizar Imagens / Gráficos
+### Inserir uma imagem
 
-Ideal para usar em conjunto com o `matplotlib`! Guarde o gráfico num PNG e mande o Swift desenhá-lo:
+O caminho deve apontar para um ficheiro de imagem acessível no Mac.
 
 ```python
-print("::swift at 300 200::")
-print("::swift name meu_grafico::")
-print("::swift image /Users/o_seu_user/Desktop/grafico.png::")
-
+print("::swift::name::meu_grafico")
+print("::swift::image::300::200::/caminho/para/grafico.png")
 ```
 
-### 4. Criar um Botão na Paleta via Python
+### Acrescentar um botão à paleta
 
-Os botões usam o separador vertical `|` para separar os argumentos, permitindo espaços livres no título e no código Python:
+A instrução recebe o título, o comando Python e um nome de ícone SF Symbols, separados por `::`.
 
 ```python
-# Sintaxe: Titulo | Comando a executar | Ícone SFSymbol
-print("::swift button Limpar Tudo | print('::swift clear::') | trash::")
-
+print("::swift::button::Limpar Tudo::print('::swift::clear')::trash")
 ```
 
-*(Assim que for executado, o botão aparece na barra lateral e é guardado para sempre no ficheiro `botoes.json`)*.
+O botão é acrescentado à paleta e a configuração é guardada em `botoes.json`.
 
----
+## MP Edit: do Canvas para Python
 
-## 5. Modo de Edição Bidirecional (MP_Edit) 🖱️🔄
+O modo **MP Edit** é activado pelo botão correspondente na barra lateral (comando `::swift::sys::toggle_edit`). Com o modo activo, os objectos do Canvas podem ser arrastados com o rato.
 
-O MacPython não se limita a receber ordens do Python. Ele **conversa de volta**.
-Na barra inferior, existe um botão **MP_Edit**. Quando ativado, todos os objetos do Canvas (textos e imagens) ganham uma margem tracejada cor-de-laranja e podem ser arrastados livremente com o rato pelo ecrã.
+Quando um objecto é largado, a nova posição é comunicada ao interpretador e registada em `macpython_pos`, usando o nome do objecto como chave.
 
-Sempre que largar um objeto (drag & drop), o Swift **injeta a nova coordenada** de volta no interpretador Python, para dentro de um dicionário global nativo chamado `macpython_pos`.
+Por exemplo:
 
-**Como testar a magia:**
+```python
+print("::swift::name::meu_texto")
+print("::swift::at::100::100::Arraste-me!")
+```
 
-1. Crie um objeto através do terminal:
-`print('::swift name meu_texto::')`
-`print('::swift print Arraste-me!::')`
-2. Ative o botão **MP_Edit** na interface e mova o texto para outro sítio com o rato.
-3. No terminal Python, escreva e envie:
-`print(macpython_pos['meu_texto'])`
+Depois de activar o MP Edit e arrastar o objecto:
 
-*(O Python irá devolver a coordenada exata (X, Y) onde você deixou o objeto visualmente!)*
+```python
+print(macpython_pos["meu_texto"])
+```
 
----
+O resultado é a tupla com as coordenadas `(x, y)` do objecto.
+
+## Documentação
+
+A descrição dos módulos Swift, da estrutura do projecto e dos comandos de sistema está em [`API.md`](API.md).
 
 ## Licença
 
-Este projeto é disponibilizado sob a **Licença MIT**.
+Este projecto é disponibilizado sob a **Licença MIT**.  
 Criado por Nuno C. Marques (2026).
-Qualquer pessoa pode usar, modificar e distribuir, desde que mantenha a atribuição à versão base do MacPython.
-
