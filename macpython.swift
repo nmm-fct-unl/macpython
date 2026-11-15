@@ -1,6 +1,6 @@
 // =====================================================================
 //  MacPython 🐍
-//  Versão: 0.0
+//  Versão: 0.0 (inicial version)
 //  Ano: 2026
 //  Autor: Nuno C. Marques
 //  Licença: MIT License
