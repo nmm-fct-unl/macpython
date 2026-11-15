@@ -1,3 +1,11 @@
+// =====================================================================
+//  MacPython 🐍
+//  Versão: 0.1
+//  Ano: 2026
+//  Autor: Nuno C. Marques
+//  Licença: MIT License
+// =====================================================================
+
 import SwiftUI
 import AppKit
 import Foundation
@@ -29,8 +37,8 @@ class GestorBotoes: ObservableObject {
         }
         
         self.botoes = [
-            ComandoPaleta(titulo: "Limpar Tudo", comando: "print('::swift::clear')", icone: "trash.fill"),
-            ComandoPaleta(titulo: "Canvas", comando: "print('::swift::at::150::100::Olá MacPython 🐍🍏')", icone: "paintbrush.fill")
+            ComandoPaleta(titulo: "Limpar Tudo", comando: "print('::swift clear::')", icone: "trash.fill"),
+            ComandoPaleta(titulo: "Canvas", comando: "print('::swift at 150 100::')\nprint('::swift name ola::')\nprint('::swift print Olá MacPython 🐍::')", icone: "paintbrush.fill")
         ]
         salvarNoFicheiro()
     }
@@ -50,26 +58,30 @@ class GestorBotoes: ObservableObject {
 }
 
 // ==========================================
-// 2. DADOS DO CANVAS
+// 2. DADOS DO CANVAS (Agora mutáveis e Equatable)
 // ==========================================
-enum TipoConteudoCanvas {
+enum TipoConteudoCanvas: Equatable {
     case texto(String)
     case imagem(String)
 }
 
-struct ItemCanvas: Identifiable {
-    let id = UUID()
-    let x: CGFloat
-    let y: CGFloat
+struct ItemCanvas: Identifiable, Equatable {
+    let id: String 
+    var x: CGFloat // Agora são variáveis para podermos arrastar!
+    var y: CGFloat
     let conteudo: TipoConteudoCanvas
 }
 
 // ==========================================
-// 3. MOTOR PYTHON COM PROTOCOLO DE INTERCEPÇÃO
+// 3. MOTOR PYTHON (Máquina de Estados)
 // ==========================================
 class MotorPython: ObservableObject {
-    @Published var historia: String = "Bem-vindo ao MacPython! 🐍🍏\n"
+    @Published var historia: String = "Bem-vindo ao MacPython! 🐍\n"
     @Published var itensCanvas: [ItemCanvas] = []
+    
+    private var mpAtX: CGFloat = 100
+    private var mpAtY: CGFloat = 100
+    private var mpName: String = UUID().uuidString
     
     private var processo = Process()
     private var pipeEntrada = Pipe()
@@ -80,7 +92,8 @@ class MotorPython: ObservableObject {
     
     init() {
         processo.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
-        let pythonScript = "import sys, code; sys.ps1=''; sys.ps2=''; code.interact(banner='', exitmsg='')"
+        // O dicionário global 'macpython_pos' é injetado diretamente no arranque do Python!
+        let pythonScript = "import sys, code; sys.ps1=''; sys.ps2=''; macpython_pos={}; code.interact(banner='', exitmsg='', local=globals())"
         processo.arguments = ["-u", "-c", pythonScript]
         
         processo.standardInput = pipeEntrada
@@ -105,35 +118,50 @@ class MotorPython: ObservableObject {
     }
     
     private func interpretarLinhaProtocolo(_ linha: String) {
-        if linha.hasPrefix("::swift::") {
-            let partes = linha.components(separatedBy: "::")
-            if partes.count >= 3 {
-                let comando = partes[2]
-                switch comando {
-                case "clear":
-                    historia = ""
-                    itensCanvas.removeAll()
-                case "at":
-                    if partes.count >= 6, let x = Double(partes[3]), let y = Double(partes[4]) {
-                        let texto = partes[5...].joined(separator: "::")
-                        itensCanvas.append(ItemCanvas(x: CGFloat(x), y: CGFloat(y), conteudo: .texto(texto)))
-                    }
-                case "image":
-                    if partes.count >= 6, let x = Double(partes[3]), let y = Double(partes[4]) {
-                        let caminho = partes[5...].joined(separator: "::")
-                        itensCanvas.append(ItemCanvas(x: CGFloat(x), y: CGFloat(y), conteudo: .imagem(caminho)))
-                    }
-                case "button":
-                    if partes.count >= 6 {
-                        let info = ["titulo": partes[3], "comando": partes[4], "icone": partes[5]]
-                        NotificationCenter.default.post(name: NSNotification.Name("CriarBotaoPython"), object: nil, userInfo: info)
-                    }
-                default: break
+        let prefixo = "::swift "
+        if linha.hasPrefix(prefixo) {
+            var instrucao = linha.dropFirst(prefixo.count)
+            if instrucao.hasSuffix("::") { instrucao = instrucao.dropLast(2) }
+            
+            let partes = instrucao.split(separator: " ", maxSplits: 1)
+            guard let comando = partes.first else { return }
+            let argumentos = partes.count > 1 ? String(partes[1]).trimmingCharacters(in: .whitespaces) : ""
+            
+            switch String(comando) {
+            case "clear": historia = ""; itensCanvas.removeAll()
+            case "at":
+                let coords = argumentos.split(separator: " ")
+                if coords.count >= 2, let x = Double(coords[0]), let y = Double(coords[1]) {
+                    self.mpAtX = CGFloat(x); self.mpAtY = CGFloat(y)
                 }
+            case "name": self.mpName = argumentos
+            case "print":
+                adicionarOuAtualizarItem(ItemCanvas(id: mpName, x: mpAtX, y: mpAtY, conteudo: .texto(argumentos)))
+                self.mpName = UUID().uuidString
+            case "image":
+                adicionarOuAtualizarItem(ItemCanvas(id: mpName, x: mpAtX, y: mpAtY, conteudo: .imagem(argumentos)))
+                self.mpName = UUID().uuidString
+            case "button":
+                let argsBotao = argumentos.components(separatedBy: "|").map { $0.trimmingCharacters(in: .whitespaces) }
+                if argsBotao.count >= 3 {
+                    let info = ["titulo": argsBotao[0], "comando": argsBotao[1], "icone": argsBotao[2]]
+                    NotificationCenter.default.post(name: NSNotification.Name("CriarBotaoPython"), object: nil, userInfo: info)
+                }
+            default: historia += linha + "\n"
             }
         } else {
             historia += linha + "\n"
         }
+    }
+    
+    private func adicionarOuAtualizarItem(_ novoItem: ItemCanvas) {
+        if let index = itensCanvas.firstIndex(where: { $0.id == novoItem.id }) {
+            itensCanvas[index] = novoItem
+        } else {
+            itensCanvas.append(novoItem)
+        }
+        // Sempre que se cria ou atualiza um item por código, avisa o dicionário Python também
+        atualizarPosicaoPython(id: novoItem.id, x: novoItem.x, y: novoItem.y)
     }
     
     func executar(comando: String) {
@@ -145,6 +173,12 @@ class MotorPython: ObservableObject {
     func injetarCodigoSilencioso(_ codigo: String) {
         let input = codigo + "\n"
         if let data = input.data(using: .utf8) { pipeEntrada.fileHandleForWriting.write(data) }
+    }
+    
+    // Comunica de volta para o Python o resultado de um drag & drop visual
+    func atualizarPosicaoPython(id: String, x: CGFloat, y: CGFloat) {
+        let codigo = "macpython_pos['\(id)'] = (\(Int(x)), \(Int(y)))"
+        injetarCodigoSilencioso(codigo)
     }
 }
 
@@ -174,16 +208,35 @@ struct LinhaTextoView: View {
 }
 
 // ==========================================
-// 5. INTERFACE PRINCIPAL (AGORA COM HSPLITVIEW)
+// 5. INTERFACE PRINCIPAL
 // ==========================================
 struct TerminalPythonView: View {
     @StateObject private var motor = MotorPython()
     @StateObject private var gestorBotoes = GestorBotoes()
     @State private var comando: String = ""
+    @State private var modoEdicao: Bool = false // <-- NOVO: Estado de Edição
+    
     let layoutColunas = [GridItem(.adaptive(minimum: 75), spacing: 10)]
     
+    // Função helper para desenhar o conteúdo (limpa o código do ForEach)
+    @ViewBuilder
+    func renderizarConteudo(item: ItemCanvas) -> some View {
+        switch item.conteudo {
+        case .texto(let t):
+            Text(t)
+                .font(.headline).padding(8).background(Color.yellow.opacity(0.9))
+                .foregroundColor(.black).cornerRadius(8).shadow(radius: 5)
+        case .imagem(let caminho):
+            if let img = NSImage(contentsOfFile: caminho) {
+                Image(nsImage: img).resizable().scaledToFit()
+                    .frame(maxWidth: 400, maxHeight: 400).shadow(radius: 10)
+            } else {
+                Text("Erro: \(caminho)").foregroundColor(.red)
+            }
+        }
+    }
+    
     var body: some View {
-        // HSplitView cria automaticamente o separador arrastável do macOS!
         HSplitView {
             
             // --- PALETA LATERAL ---
@@ -211,7 +264,7 @@ struct TerminalPythonView: View {
                 Button("Recarregar JSON") { gestorBotoes.carregarBotoes() }
                     .padding(.bottom, 10).controlSize(.small)
             }
-            .frame(minWidth: 150, idealWidth: 200, maxWidth: 400) // Limites da barra lateral
+            .frame(minWidth: 150, idealWidth: 200, maxWidth: 400)
             .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("CriarBotaoPython"))) { notif in
                 if let info = notif.userInfo as? [String: String],
@@ -242,41 +295,57 @@ struct TerminalPythonView: View {
                         }
                     }
                     
-                    // Frente: Canvas
-                    ForEach(motor.itensCanvas) { item in
-                        switch item.conteudo {
-                        case .texto(let t):
-                            Text(t)
-                                .font(.headline).padding(8).background(Color.yellow.opacity(0.9))
-                                .foregroundColor(.black).cornerRadius(8).shadow(radius: 5)
-                                .position(x: item.x, y: item.y)
-                        case .imagem(let caminho):
-                            if let img = NSImage(contentsOfFile: caminho) {
-                                Image(nsImage: img).resizable().scaledToFit()
-                                    .frame(maxWidth: 400, maxHeight: 400).shadow(radius: 10)
-                                    .position(x: item.x, y: item.y)
-                            } else {
-                                Text("Erro: \(caminho)").foregroundColor(.red).position(x: item.x, y: item.y)
-                            }
-                        }
+                    // --- CANVAS COM SUPORTE A DRAG & DROP ---
+                    // Usamos Binding ($motor.itensCanvas) para podermos alterar a variável X e Y
+                    ForEach($motor.itensCanvas) { $item in
+                        renderizarConteudo(item: item)
+                            // Moldura visual de Edição
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.orange, style: StrokeStyle(lineWidth: modoEdicao ? 3 : 0, dash: [5, 5]))
+                            )
+                            .position(x: item.x, y: item.y)
+                            // Gesto de Arrastar (Só funciona se o modoEdicao estiver true)
+                            .gesture(
+                                DragGesture(coordinateSpace: .named("Canvas"))
+                                    .onChanged { value in
+                                        guard modoEdicao else { return }
+                                        item.x = value.location.x
+                                        item.y = value.location.y
+                                    }
+                                    .onEnded { value in
+                                        guard modoEdicao else { return }
+                                        // Quando larga o objeto, avisa o dicionário Python!
+                                        motor.atualizarPosicaoPython(id: item.id, x: item.x, y: item.y)
+                                    }
+                            )
                     }
                 }
+                .coordinateSpace(name: "Canvas") // Espaço de coordenadas para o rato bater certo com a janela
                 .clipped()
                 
+                // Barra Inferior (Agora com o botão de Modo Edição!)
                 HStack {
                     TextField("Comando python...", text: $comando)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
                         .font(.system(.body, design: .monospaced))
                         .onSubmit { enviarComando() }
+                    
                     Button("Enviar") { enviarComando() }
                     Button("Carregar .py") { abrirFicheiro() }
+                    
+                    // O NOVO TOGGLE
+                    Toggle(isOn: $modoEdicao) {
+                        Label("MP_Edit", systemImage: "cursorarrow.and.square.on.square.dashed")
+                    }
+                    .toggleStyle(.button)
+                    .tint(.orange)
                 }
             }
             .padding(20)
             .frame(minWidth: 400, maxWidth: .infinity, minHeight: 300, maxHeight: .infinity)
             
         }
-        // Limites gerais da janela (permite maximizar livremente)
         .frame(minWidth: 700, idealWidth: 900, minHeight: 500, idealHeight: 600)
     }
     
