@@ -13,6 +13,7 @@ struct LinhaTextoView: View {
     var isComando: Bool { linha.hasPrefix(marcador) }
     var textoLimpo: String {
         linha.replacingOccurrences(of: marcador, with: "")
+	.replacingOccurrences(of: ">>> ", with: "")
     }
 
     var body: some View {
