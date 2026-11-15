@@ -104,6 +104,17 @@ struct TerminalPythonView: View {
                         .font(.system(size: 14, design: .monospaced))
                         .focused($inputIsFocused)
                         .onSubmit { enviarComando() }
+                        .dropDestination(for: String.self) { items, _ in
+                            guard let texto = items.first else {
+                                return false
+                            }
+
+                            // Substitui todo o conteúdo do campo pelo comando
+                            // arrastado a partir do histórico do terminal.
+                            comando = texto
+                            inputIsFocused = true
+                            return true
+                        }
                     
                     Button("Enviar") { enviarComando() }
                         .keyboardShortcut(.defaultAction)
