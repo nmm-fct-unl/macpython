@@ -15,7 +15,7 @@ class MotorPython: ObservableObject {
     
     init() {
         processo.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        let pythonScript = "import sys, code; sys.ps1=''; sys.ps2=''; macpython_pos={}; code.interact(banner='', exitmsg='')"
+        let pythonScript = "import sys, code; sys.ps1=''; sys.ps2=''; macpython_pos={}; code.interact(banner='', exitmsg='', local=globals())"
         processo.arguments = ["python3", "-u", "-c", pythonScript]
         
         processo.standardInput = pipeEntrada

@@ -2,7 +2,49 @@ import SwiftUI
 
 
 // MARK: - Linha do Terminal
+
 struct LinhaTextoView: View {
+    let linha: String
+    let onSelectCommand: (String) -> Void
+
+    @State private var isHovered = false
+    let marcador = "\u{200B}"
+
+    var isComando: Bool { linha.hasPrefix(marcador) }
+    var textoLimpo: String {
+        linha.replacingOccurrences(of: marcador, with: "")
+    }
+
+    var body: some View {
+        HStack {
+            Text(textoLimpo)
+                .font(.system(size: 14, design: .monospaced))
+                .foregroundColor(isComando ? .yellow : .green)
+                .textSelection(.enabled)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            isHovered && isComando
+                ? Color.white.opacity(0.15)
+                : Color.clear
+        )
+        .cornerRadius(4)
+        .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
+        .simultaneousGesture(
+            TapGesture().onEnded {
+                guard isComando else { return }
+                onSelectCommand(
+                    textoLimpo.replacingOccurrences(of: ">>> ", with: "")
+                )
+            }
+        )
+    }
+}
+
+struct LinhaTextoView_old: View {
     let linha: String
     @Binding var comandoAtual: String
     @State private var isHovered: Bool = false

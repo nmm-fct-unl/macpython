@@ -9,8 +9,7 @@ struct TerminalPythonView: View {
     @State private var comando: String = ""
     @State private var isMPEditActive: Bool = false
     @FocusState private var inputIsFocused: Bool
-    
-    // NOVO: Memória do histórico de input para as setas
+	@State private var keyMonitor: Any? 
     @State private var historicoInput: [String] = []
     @State private var indiceHistorico: Int = -1
     
@@ -73,7 +72,12 @@ struct TerminalPythonView: View {
                             LazyVStack(alignment: .leading, spacing: 0) {
                                 let linhas = motor.historia.components(separatedBy: "\n")
                                 ForEach(Array(linhas.enumerated()), id: \.offset) { index, linha in
-                                    LinhaTextoView(linha: linha, comandoAtual: $comando)
+                                    //LinhaTextoView(linha: linha, comandoAtual: $comando) 
+									LinhaTextoView(linha: linha) { texto in
+									    comando = texto
+									    inputIsFocused = true
+									}
+									//End ChatGPT
                                 }
                                 Color.clear.frame(height: 1).id("FUNDO")
                             }
@@ -99,26 +103,6 @@ struct TerminalPythonView: View {
                         .textFieldStyle(RoundedBorderTextFieldStyle())
                         .font(.system(size: 14, design: .monospaced))
                         .focused($inputIsFocused)
-                        .onKeyPress(.upArrow) { // SETA PARA CIMA
-                            if !historicoInput.isEmpty && indiceHistorico > 0 {
-                                indiceHistorico -= 1
-                                comando = historicoInput[indiceHistorico]
-                                return .handled
-                            }
-                            return .ignored
-                        }
-                        .onKeyPress(.downArrow) { // SETA PARA BAIXO
-                            if !historicoInput.isEmpty && indiceHistorico < historicoInput.count - 1 {
-                                indiceHistorico += 1
-                                comando = historicoInput[indiceHistorico]
-                                return .handled
-                            } else if indiceHistorico == historicoInput.count - 1 {
-                                indiceHistorico += 1
-                                comando = ""
-                                return .handled
-                            }
-                            return .ignored
-                        }
                         .onSubmit { enviarComando() }
                     
                     Button("Enviar") { enviarComando() }
@@ -130,6 +114,53 @@ struct TerminalPythonView: View {
             .frame(minWidth: 400, maxWidth: .infinity, minHeight: 300, maxHeight: .infinity)
             
         }
+		.onAppear {
+		            keyMonitor = NSEvent.addLocalMonitorForEvents(
+		                matching: .keyDown
+		            ) { event in
+
+		                guard inputIsFocused else { return event }
+
+		                switch event.keyCode {
+		                case 126: // Seta para cima
+		                    guard !historicoInput.isEmpty,
+		                          indiceHistorico > 0 else {
+		                        return event
+		                    }
+
+		                    indiceHistorico -= 1
+		                    comando = historicoInput[indiceHistorico]
+		                    return nil
+
+		                case 125: // Seta para baixo
+		                    guard !historicoInput.isEmpty else {
+		                        return event
+		                    }
+
+		                    if indiceHistorico < historicoInput.count - 1 {
+		                        indiceHistorico += 1
+		                        comando = historicoInput[indiceHistorico]
+		                    } else if indiceHistorico == historicoInput.count - 1 {
+		                        indiceHistorico += 1
+		                        comando = ""
+		                    } else {
+		                        return event
+		                    }
+
+		                    return nil
+
+		                default:
+		                    return event
+		                }
+		            }
+		        }
+		        .onDisappear {
+		            if let monitor = keyMonitor {
+		                NSEvent.removeMonitor(monitor)
+		                keyMonitor = nil
+		            }
+		        }
+
         .frame(minWidth: 700, idealWidth: 900, minHeight: 500, idealHeight: 600)
     }
     
